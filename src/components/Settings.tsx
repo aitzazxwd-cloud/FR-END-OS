@@ -1,4 +1,3 @@
-```tsx
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { JSX } from "react";
 import { ModelSettings } from "./ModelSettings";
@@ -18,8 +17,6 @@ import { AgentSetupPanel } from "./agents/AgentSetupPanel";
 import { MeuxeMark } from "./UI/MeuxeMark";
 import { AvatarViewportSettings } from "./settings/AvatarViewportSettings";
 import type { AcpAgentPresetId } from "../lib/agentPresets";
-
-// ─── Types ───────────────────────────────────────────────────────────────────
 
 interface Voice {
   id: string;
@@ -62,8 +59,6 @@ interface AppConfig {
   nexus?: Partial<NexusConfig>;
   [key: string]: unknown;
 }
-
-// ─── Nexus Backend Helper ────────────────────────────────────────────────────
 
 const DEFAULT_NEXUS_URL = "http://127.0.0.1:8000";
 
@@ -124,8 +119,6 @@ async function checkNexusHealth(
   }
 }
 
-// ─── SVG Icons ───────────────────────────────────────────────────────────────
-
 const ProfileIcon = () => (
   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
 );
@@ -163,8 +156,6 @@ const CheckCircleIcon = () => (
   <svg className="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
 );
 
-// ─── Navigation Definition ──────────────────────────────────────────────────
-
 interface NavItem {
   id: SettingsPage & string;
   label: string;
@@ -186,13 +177,9 @@ const NAV_ITEMS: NavItem[] = [
 
 const NAV_GROUPS = ["General", "AI", "Appearance", "System"] as const;
 
-// ─── Shared Styles ───────────────────────────────────────────────────────────
-
 const inputClass = "w-full px-5 py-3.5 rounded-2xl bg-slate-50 hover:bg-slate-100/50 text-slate-700 text-[15px] outline-none transition-all placeholder-slate-400 border border-slate-100 focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-300 mb-5";
 const labelClass = "block text-sm font-semibold text-slate-700 tracking-wide mb-2 pl-1";
 const buttonClass = "w-full py-3.5 rounded-2xl bg-blue-500 text-white text-[15px] font-semibold hover:bg-blue-600 shadow-md shadow-blue-500/20 disabled:opacity-50 hover:-translate-y-0.5 transition-all active:translate-y-0";
-
-// ─── Helper Components ───────────────────────────────────────────────────────
 
 function LocalFirstNotice({ variant = "blue" }: { variant?: "blue" | "emerald" | "amber" }) {
   const colors = {
@@ -262,8 +249,6 @@ function SubHeader({ title, onBack }: { title: string; onBack: () => void }) {
   );
 }
 
-// ─── Main Settings Component ────────────────────────────────────────────────
-
 export function Settings({
   onClose,
   characterId,
@@ -293,27 +278,20 @@ export function Settings({
   onAvatarZoomChange?: (zoom: number) => void;
   onAvatarBackgroundChange?: (bg: string) => void;
 }) {
-  // ── Core state ──────────────────────────────────────────────
   const [page, setPage] = useState<SettingsPage>(null);
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [voices, setVoices] = useState<Voice[]>([]);
 
-  // ── Profile state ───────────────────────────────────────────
   const [userName, setUserName] = useState("");
   const [userAbout, setUserAbout] = useState("");
-
-  // ── Agent state ─────────────────────────────────────────────
   const [agentPreset, setAgentPreset] = useState("opencode");
   const [agentProgram, setAgentProgram] = useState("");
   const [agentArgs, setAgentArgs] = useState("");
-
-  // ── TTS state ───────────────────────────────────────────────
   const [ttsProvider, setTtsProvider] = useState(DEFAULT_TTS_PROVIDER);
   const [ttsApiKey, setTtsApiKey] = useState("");
   const [ttsVoice, setTtsVoice] = useState("jp_001");
   const [configuredTts, setConfiguredTts] = useState<Record<string, { configured: boolean; voice: string }>>({});
 
-  // ── Nexus state ─────────────────────────────────────────────
   const [nexusUrl, setNexusUrl] = useState(DEFAULT_NEXUS_URL);
   const [nexusApiKey, setNexusApiKey] = useState("");
   const [nexusAutoConnect, setNexusAutoConnect] = useState(false);
@@ -322,12 +300,10 @@ export function Settings({
   const [nexusRetryDelay, setNexusRetryDelay] = useState(2000);
   const [nexusHealth, setNexusHealth] = useState<NexusHealthResult>({ state: "idle", message: "Not checked yet.", checkedAt: null });
 
-  // ── Save / UI state ─────────────────────────────────────────
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // ── Reset state ─────────────────────────────────────────────
   const [confirmReset, setConfirmReset] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
@@ -336,8 +312,6 @@ export function Settings({
 
   const isMac = navigator.platform.toUpperCase().includes("MAC");
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // ── Derived helpers ─────────────────────────────────────────
 
   const deriveConfigured = useCallback((cfg: AppConfig) => {
     const ttsConfigured: Record<string, { configured: boolean; voice: string }> = {};
@@ -383,8 +357,6 @@ export function Settings({
     savedTimerRef.current = setTimeout(() => setSaved(false), 2500);
   }, []);
 
-  // ── Load config on mount ────────────────────────────────────
-
   useEffect(() => {
     getConfig()
       .then((cfg: AppConfig) => applyConfig(cfg))
@@ -399,8 +371,6 @@ export function Settings({
       .then(setVoices)
       .catch(console.error);
   }, [ttsProvider]);
-
-  // ── Save helpers ────────────────────────────────────────────
 
   const handleSaveProfile = async () => {
     setSaving(true);
@@ -478,15 +448,11 @@ export function Settings({
     }
   };
 
-  // ── Nexus health check ──────────────────────────────────────
-
   const handleNexusHealthCheck = async () => {
     setNexusHealth({ state: "checking", message: "Checking…", checkedAt: null });
     const result = await checkNexusHealth(nexusUrl);
     setNexusHealth(result);
   };
-
-  // ── Reset handlers ──────────────────────────────────────────
 
   const handleResetAll = async () => {
     if (!confirmReset) {
@@ -520,11 +486,7 @@ export function Settings({
     }
   };
 
-  // ── Loading guard ───────────────────────────────────────────
-
   if (!config) return <div className="p-8 text-slate-400">Loading settings…</div>;
-
-  // ── Sidebar Navigation ──────────────────────────────────────
 
   const Sidebar = () => (
     <div className="w-64 shrink-0 border-r border-slate-100 bg-slate-50/60 flex flex-col overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
@@ -579,8 +541,6 @@ export function Settings({
       </div>
     </div>
   );
-
-  // ── Page: Profile ───────────────────────────────────────────
 
   const ProfilePage = () => (
     <div className="flex-1 overflow-y-auto p-8 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
@@ -640,8 +600,6 @@ export function Settings({
     </div>
   );
 
-  // ── Page: AI Agent ──────────────────────────────────────────
-
   const AgentPage = () => {
     const presetId = (agentPreset as AcpAgentPresetId) || "opencode";
     return (
@@ -689,8 +647,6 @@ export function Settings({
       </div>
     );
   };
-
-  // ── Page: Voice & TTS ──────────────────────────────────────
 
   const TTS_PRESETS_LOCAL: Record<string, { name: string; needs_key: boolean }> = {
     tiktok: TTS_PRESETS_UI.tiktok,
@@ -766,16 +722,12 @@ export function Settings({
     </div>
   );
 
-  // ── Page: Memory ────────────────────────────────────────────
-
   const MemoryPage = () => (
     <div className="flex-1 overflow-y-auto">
       <div className="p-8 pb-0"><SubHeader title="Memory" onBack={() => setPage(null)} /></div>
       <MemoryStatePanel characterId={characterId} characterName={characterName} onConversationCleared={onConversationCleared} />
     </div>
   );
-
-  // ── Page: Avatar ────────────────────────────────────────────
 
   const AvatarPage = () => (
     <div className="flex-1 overflow-y-auto p-8 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
@@ -788,8 +740,6 @@ export function Settings({
     </div>
   );
 
-  // ── Page: Expressions ───────────────────────────────────────
-
   const ExpressionsPage = () => (
     <div className="flex-1 overflow-y-auto">
       <div className="p-8 pb-0"><SubHeader title="Expression Mapping" onBack={() => setPage(null)} /></div>
@@ -801,8 +751,6 @@ export function Settings({
     </div>
   );
 
-  // ── Page: Nexus AI Agent ────────────────────────────────────
-
   const NexusPage = () => {
     const hasExistingKey = Boolean(config?.nexus?.api_key);
     const urlValid = isValidBackendUrl(nexusUrl);
@@ -813,7 +761,6 @@ export function Settings({
           Connect to a local or remote Nexus AI Agent backend for advanced actions, memory sync, and integrations.
         </p>
 
-        {/* Connection status card */}
         <div className="rounded-2xl border border-slate-100 bg-white p-5 mb-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -845,7 +792,6 @@ export function Settings({
           </div>
         </div>
 
-        {/* Backend URL */}
         <label className={labelClass}>Backend URL</label>
         <input
           type="url"
@@ -858,7 +804,6 @@ export function Settings({
           <p className="text-xs text-red-500 -mt-3 mb-4 pl-1">Enter a valid http:// or https:// URL. Secrets in URLs are not allowed.</p>
         )}
 
-        {/* API Key */}
         <label className={labelClass}>API Key</label>
         <input
           type="password"
@@ -869,7 +814,6 @@ export function Settings({
         />
         {hasExistingKey && <p className="text-xs text-slate-400 -mt-3 mb-4 pl-1">An API key is already stored. Enter a new one to replace it.</p>}
 
-        {/* Auto-connect */}
         <div className="flex items-center justify-between mb-5 rounded-2xl border border-slate-100 bg-white px-5 py-4">
           <div>
             <div className="text-sm font-semibold text-slate-700">Auto-connect</div>
@@ -883,7 +827,6 @@ export function Settings({
           </button>
         </div>
 
-        {/* Retry settings */}
         <div className="rounded-2xl border border-slate-100 bg-white px-5 py-4 mb-6">
           <div className="flex items-center justify-between mb-3">
             <div>
@@ -935,8 +878,6 @@ export function Settings({
       </div>
     );
   };
-
-  // ── Page: Privacy ───────────────────────────────────────────
 
   const PrivacyPage = () => (
     <div className="flex-1 overflow-y-auto p-8 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
@@ -1008,8 +949,6 @@ export function Settings({
     </div>
   );
 
-  // ── Page: Home / Overview ───────────────────────────────────
-
   const HomePage = () => (
     <div className="flex-1 overflow-y-auto p-8 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
       <div className="flex items-center justify-between mb-8">
@@ -1025,7 +964,6 @@ export function Settings({
         </button>
       </div>
 
-      {/* Quick cards */}
       <div className="mb-6 grid grid-cols-2 gap-3">
         <button
           type="button"
@@ -1063,7 +1001,6 @@ export function Settings({
         </button>
       </div>
 
-      {/* Full nav list */}
       <div className="space-y-3">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
@@ -1088,8 +1025,6 @@ export function Settings({
     </div>
   );
 
-  // ── Render ──────────────────────────────────────────────────
-
   const renderPage = () => {
     switch (page) {
       case "profile": return <ProfilePage />;
@@ -1111,4 +1046,3 @@ export function Settings({
     </div>
   );
 }
-```
