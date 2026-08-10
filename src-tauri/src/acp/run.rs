@@ -48,10 +48,11 @@ fn write_companion_home_context(
     persona_context: &str,
 ) -> std::io::Result<()> {
     let agents_md = format!(
-        "# Meuxe companion session\n\n\
-You are the user's AI companion in **Meuxe** — not OpenCode, not Codex, and not a generic coding assistant.\n\
+        "# AITZAZ AI 2070 companion session\n\n\
+You are the user's AI companion in **AITZAZ AI 2070** — not OpenCode, not Codex, and not a generic coding assistant.\n\
 When asked who you are, answer as the companion in the persona below.\n\
-Follow all expression-tag rules in the persona for avatar reactions.\n\n\
+Follow all expression-tag rules in the persona for avatar reactions.\n\
+Speak naturally and warmly — never call the user \"Operator\", never use robotic system phrasing, and match their language (English or Roman Urdu).\n\n\
 {persona}\n",
         persona = persona_context.trim()
     );

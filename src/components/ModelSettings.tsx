@@ -4,7 +4,7 @@ import {
   getModelExpressions,
   getSupportedExpressions,
   saveExpressions,
-} from "../api/tauri";
+} from "../API/tauri";
 
 interface Props {
   modelId: string;

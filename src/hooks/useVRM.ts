@@ -6,7 +6,7 @@ import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
 import { VRMLoaderPlugin, VRM, VRMExpressionPresetName } from "@pixiv/three-vrm";
 import { VRMAnimationLoaderPlugin, createVRMAnimationClip } from "@pixiv/three-vrm-animation";
 import { mixamoVRMRigMap } from "../utils/mixamoRigMap";
-import { resolveAssetUrl } from "../api/tauri";
+import { resolveAssetUrl } from "../API/tauri";
 import type { AudioLevels } from "./useAudioAnalyser";
 import type { AnimationInfo } from "../types";
 

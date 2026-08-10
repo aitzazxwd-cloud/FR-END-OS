@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { MeuxeMark } from "../ui/MeuxeMark";
+import { MeuxeMark } from "../UI/MeuxeMark";
 
 const STEP_LABELS = ["Start", "You", "Companion", "Voice", "Connect"];
 

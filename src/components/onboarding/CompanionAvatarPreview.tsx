@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { resolveAssetUrl } from "../../api/tauri";
+import { resolveAssetUrl } from "../../API/tauri";
 import { BG_PRESETS } from "../../constants/bgPresets";
+import maryamPreviewImg from "../../assets/maryam/base.jpg";
 
 const Live2DCanvas = lazy(() =>
   import("../Live2DCanvas").then((m) => ({ default: m.Live2DCanvas })),
@@ -63,7 +64,14 @@ export function CompanionAvatarPreview({
           <p className="text-sm">Your companion will appear here</p>
         </div>
       )}
-      {model && (
+      {model && model.type === "maryam" && (
+        <img
+          src={maryamPreviewImg}
+          alt="Maryam preview"
+          className="h-full w-full object-cover"
+        />
+      )}
+      {model && model.type !== "maryam" && (
         <Suspense
           fallback={
             <div className="flex h-full min-h-[220px] items-center justify-center text-sm text-white/50">

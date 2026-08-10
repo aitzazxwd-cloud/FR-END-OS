@@ -7,6 +7,11 @@ export interface TtsPresetUi {
 }
 
 export const TTS_PRESETS_UI: Record<string, TtsPresetUi> = {
+  browser: {
+    name: "Browser voice",
+    needs_key: false,
+    hint: "Your browser's built-in voices — no key needed",
+  },
   tiktok: {
     name: "Meuxe TTS",
     needs_key: false,

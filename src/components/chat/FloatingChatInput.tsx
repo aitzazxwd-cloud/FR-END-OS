@@ -79,14 +79,14 @@ export const FloatingChatInput = memo(function FloatingChatInput({
           type="text"
           value={input}
           onChange={handleInputChange}
-          placeholder="Type a message..."
+          placeholder="Talk to Maryam…"
           disabled={isProcessing}
           className="companion-chat-input min-w-0 flex-1 bg-transparent px-2 py-2.5 text-[15px] text-slate-800 outline-none ring-0 placeholder:text-slate-400 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 disabled:opacity-50"
         />
         <button
           type="submit"
           disabled={isProcessing || !input.trim()}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white transition-all hover:bg-blue-700 disabled:opacity-30"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-violet-600 text-white transition-all hover:from-indigo-700 hover:to-violet-700 disabled:opacity-30"
           title="Send"
         >
           {isProcessing ? (

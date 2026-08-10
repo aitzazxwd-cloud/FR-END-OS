@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from "react";
 import { useAudioAnalyser } from "./useAudioAnalyser";
-import { transcribeVoice, transcribeVoiceLocal } from "../api/tauri";
+import { transcribeVoice, transcribeVoiceLocal } from "../API/tauri";
 
 const SAMPLE_RATE = 16000;
 

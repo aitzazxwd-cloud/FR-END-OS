@@ -132,6 +132,29 @@ const MessageBubble = memo(function MessageBubble({
 
   return (
     <div className={`flex flex-col ${isUser ? "items-end" : "items-start"} animate-in fade-in slide-in-from-bottom-1 duration-200`}>
+      {!isUser && (
+        <div className="mb-1 flex items-center gap-2 px-1">
+          <span
+            className={`flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-[9px] font-bold text-white shadow-sm ${
+              dark ? "" : ""
+            }`}
+          >
+            M
+          </span>
+          <span className={`text-[10px] font-semibold uppercase tracking-wider ${dark ? "text-indigo-300" : "text-indigo-500"}`}>
+            {characterName}
+          </span>
+          {expression && expression !== "neutral" && (
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10px] font-normal capitalize ${
+                dark ? "bg-white/10 text-white/50" : "bg-indigo-50 text-indigo-400"
+              }`}
+            >
+              {expression}
+            </span>
+          )}
+        </div>
+      )}
       {isUser && (
         <span className={`mb-1 px-2 text-[10px] font-semibold uppercase tracking-wider ${dark ? "text-white/35" : "text-slate-400"}`}>
           You
@@ -142,26 +165,12 @@ const MessageBubble = memo(function MessageBubble({
           isUser
             ? dark
               ? "rounded-tr-lg bg-indigo-600 text-white shadow-md shadow-indigo-900/30"
-              : "rounded-tr-lg bg-blue-600 text-white shadow-sm"
+              : "rounded-tr-lg bg-slate-800 text-white shadow-md shadow-slate-900/10"
             : dark
               ? "rounded-tl-lg border border-white/10 bg-white/10 text-white/90 shadow-sm"
-              : "rounded-tl-lg border border-slate-100 bg-white text-slate-700 shadow-sm"
+              : "rounded-tl-lg border border-indigo-100/70 bg-gradient-to-br from-white via-indigo-50/60 to-violet-50/60 text-slate-700 shadow-[0_6px_24px_rgba(79,70,229,0.08)]"
         }`}
       >
-        {!isUser && (
-          <div className="mb-1.5 flex items-center gap-2">
-            <span className={`text-[11px] font-semibold uppercase tracking-wide ${dark ? "text-indigo-300" : "text-blue-500"}`}>
-              {characterName}
-            </span>
-            {expression && expression !== "neutral" && (
-              <span
-                className={`rounded-full px-2 py-0.5 text-[10px] font-normal capitalize ${dark ? "bg-white/10 text-white/50" : "bg-slate-50 text-slate-400"}`}
-              >
-                {expression}
-              </span>
-            )}
-          </div>
-        )}
         <div
           className={`text-[14px] leading-relaxed break-words ${isUser ? "text-white/95" : dark ? "text-white/85" : "text-slate-700"}`}
         >

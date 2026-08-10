@@ -15,12 +15,14 @@ export function ModelPicker({
   onSelect: (id: string) => void;
 }) {
   const labelFor = (model: PreviewModel) => {
+    if (model.id === "builtin-maryam") return "Maryam";
     if (model.id === "haru") return "Haru";
     if (model.id === "utsuwa") return "Utsuwa";
     return model.id;
   };
 
-  const typeLabel = (type: string) => (type === "vrm" ? "3D VRM" : "Live2D");
+  const typeLabel = (type: string) =>
+    type === "vrm" ? "3D VRM" : type === "maryam" ? "Original" : "Live2D";
   if (models.length === 0) {
     return (
       <p className="text-sm text-slate-500">

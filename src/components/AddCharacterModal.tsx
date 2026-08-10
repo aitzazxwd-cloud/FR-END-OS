@@ -5,7 +5,7 @@ import {
   importLive2DModel,
   importVRMModel,
   listModels,
-} from "../api/tauri";
+} from "../API/tauri";
 import { buildCompanionPersonalityDraft } from "../lib/companionCharacterDraft";
 import { COMPANION_VIBE_PACKS } from "../lib/companionVibes";
 import type { ModelInfo } from "../types";

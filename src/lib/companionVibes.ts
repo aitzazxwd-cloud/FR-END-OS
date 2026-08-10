@@ -11,6 +11,14 @@ export interface CompanionVibePack {
 
 export const COMPANION_VIBE_PACKS: CompanionVibePack[] = [
   {
+    id: "Maryam",
+    emoji: "✨",
+    title: "Maryam",
+    subtitle: "Warm, elegant, intelligent",
+    relationship_style: "Gentle",
+    speech_style: "Natural",
+  },
+  {
     id: "Wise",
     emoji: "📖",
     title: "Warm & thoughtful",

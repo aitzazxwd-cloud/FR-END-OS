@@ -8,6 +8,11 @@ import {
   installAgentSetup,
   type AgentSetupStatusResponse,
 } from "../API/tauri";
+import { isTauri } from "../lib/browserEnv";
+import {
+  useBrowserSpeech,
+  browserSpeechSupported,
+} from "../hooks/useBrowserSpeech";
 import {
   ACP_AGENT_PRESET_IDS,
   type AcpAgentPresetId,
@@ -59,7 +64,13 @@ const labelClass = "block text-sm font-semibold text-slate-700 mb-2";
 const headingClass = "text-2xl sm:text-[1.65rem] font-bold text-slate-900 mb-1.5 tracking-tight";
 const descriptionClass = "text-slate-500 text-sm mb-5 leading-relaxed";
 
-export function Onboarding({ onComplete }: { onComplete: () => void }) {
+export function Onboarding({
+  onComplete,
+  onSkipToPreview,
+}: {
+  onComplete: () => void;
+  onSkipToPreview?: () => void;
+}) {
   const [step, setStep] = useState(0);
   const [voices, setVoices] = useState<Voice[]>([]);
   const [models, setModels] = useState<Model[]>([]);
@@ -68,20 +79,28 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [agentSetup, setAgentSetup] = useState<AgentSetupStatusResponse | null>(null);
   const [agentSetupLoading, setAgentSetupLoading] = useState(false);
+  const browserSpeech = useBrowserSpeech();
 
   const ttsPresets = TTS_PRESETS_UI;
 
+  const isBrowserOnly = !isTauri();
+
+  // Maryam is the default companion; the user is Aitzaz.
   const [form, setForm] = useState<FormData>({
-    user: { name: "", about: "" },
+    user: { name: "Aitzaz", about: "" },
     agent: { preset: "opencode", program: "", args: "" },
-    tts: { provider: DEFAULT_TTS_PROVIDER, api_key: "", voice: "jp_001" },
+    tts: {
+      provider: isBrowserOnly ? "browser" : DEFAULT_TTS_PROVIDER,
+      api_key: "",
+      voice: isBrowserOnly ? "browser-best" : "jp_001",
+    },
     companion: {
-      name: "",
+      name: "Maryam",
       personality: "",
-      vibe: "Wise",
+      vibe: "Maryam",
       relationship_style: "Gentle",
       speech_style: "Calm",
-      model_id: "haru",
+      model_id: isBrowserOnly ? "builtin-maryam" : "haru",
     },
   });
 
@@ -101,6 +120,21 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
   }, []);
 
   useEffect(() => {
+    if (form.tts.provider === "browser") {
+      const browserVoices = browserSpeech.voices.map((v) => ({
+        id: v.voiceURI,
+        name: `${v.name} (${v.lang})`,
+      }));
+      setVoices(browserVoices);
+      if (browserVoices.length > 0) {
+        const best = browserSpeech.selectedVoice;
+        const defaultId = best?.voiceURI ?? browserVoices[0].id;
+        if (!browserVoices.find((v) => v.id === form.tts.voice)) {
+          setForm((prev) => ({ ...prev, tts: { ...prev.tts, voice: defaultId } }));
+        }
+      }
+      return;
+    }
     getVoices(form.tts.provider)
       .then((data) => {
         setVoices(data);
@@ -112,7 +146,14 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
         }
       })
       .catch(console.error);
-  }, [form.tts.provider]);
+  }, [form.tts.provider, browserSpeech.voices, browserSpeech.selectedVoice]);
+
+  // Keep the browser speech hook in sync with the picked browser voice.
+  useEffect(() => {
+    if (form.tts.provider === "browser" && form.tts.voice && form.tts.voice !== "browser-best") {
+      browserSpeech.setSelectedVoiceURI(form.tts.voice);
+    }
+  }, [form.tts.provider, form.tts.voice, browserSpeech]);
 
   useEffect(() => {
     if (step !== 4 || form.agent.preset === "custom") {
@@ -154,6 +195,19 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
   const [previewing, setPreviewing] = useState(false);
 
   const playSample = async () => {
+    if (form.tts.provider === "browser") {
+      if (!browserSpeechSupported()) {
+        setPreviewError("Speech synthesis is not supported in this browser.");
+        return;
+      }
+      setPreviewError("");
+      setPreviewing(true);
+      browserSpeech.speak("Hi Aitzaz, I'm Maryam. I'm here with you.", {
+        rate: 1.0,
+        onDone: () => setPreviewing(false),
+      });
+      return;
+    }
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current = null;
@@ -291,7 +345,8 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
           <MeuxeMark className="h-16 w-16 mx-auto mb-5" />
           <h2 className="text-2xl font-bold text-slate-900 mb-2">You&apos;re all set</h2>
           <p className="text-slate-500 text-[15px] max-w-sm mx-auto">
-            <span className="font-semibold text-indigo-600">{form.companion.name}</span> is waiting on your desktop.
+            <span className="font-semibold text-indigo-600">{form.companion.name}</span> is ready —
+            your companion on <span className="font-semibold text-slate-600">AITZAZ AI 2070</span>.
           </p>
         </div>
       </OnboardingShell>
@@ -324,6 +379,19 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
               </div>
             ))}
           </div>
+
+          {onSkipToPreview && (
+            <button
+              type="button"
+              onClick={onSkipToPreview}
+              className="mt-6 w-full rounded-2xl border border-indigo-200 bg-indigo-50/70 px-5 py-3.5 text-[15px] font-semibold text-indigo-700 transition-all hover:bg-indigo-100"
+            >
+              Preview Maryam now
+              <span className="ml-2 text-xs font-medium text-indigo-400">
+                (browser preview — AI engine connects in the desktop app)
+              </span>
+            </button>
+          )}
         </div>
       )}
 
@@ -355,15 +423,17 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
 
       {step === 2 && (
         <div className="animate-in fade-in duration-500">
-          <h2 className={headingClass}>Meet them</h2>
-          <p className={descriptionClass}>Name, look, and personality—in one place.</p>
+          <h2 className={headingClass}>Meet Maryam</h2>
+          <p className={descriptionClass}>
+            She's your AI companion — name, look, and personality in one place.
+          </p>
 
-          <label className={labelClass}>Their name</label>
+          <label className={labelClass}>Her name</label>
           <input
             type="text"
             value={form.companion.name}
             onChange={(e) => updateForm("companion", "name", e.target.value)}
-            placeholder="Who are you creating?"
+            placeholder="Your companion's name"
             className={inputClass}
           />
 

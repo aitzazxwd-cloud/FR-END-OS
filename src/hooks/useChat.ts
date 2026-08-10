@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useMemo } from "react";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
-import { sendChat } from "../api/tauri";
+import { sendChat } from "../API/tauri";
 import type { ChatTimelineItem, ToolCallStatus } from "../types";
 
 interface Message {

@@ -18,7 +18,7 @@ import {
   ingestMemoryFolderDialog,
   exportMemoryZipDialog,
   importMemoryZipDialog,
-} from "../api/tauri";
+} from "../API/tauri";
 import type {
   DreamRun,
   MemoryRecord,

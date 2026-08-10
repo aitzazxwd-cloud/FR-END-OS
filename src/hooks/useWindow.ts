@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { toggleMiniMode, expandWindow } from "../api/tauri";
+import { toggleMiniMode, expandWindow } from "../API/tauri";
 
 export function useWindow() {
   const [isMiniMode, setIsMiniMode] = useState(false);

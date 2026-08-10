@@ -11,6 +11,8 @@ import {
 } from "../API/tauri";
 import { ACP_AGENT_PRESET_IDS, ACP_AGENT_PRESETS } from "../lib/agentPresets";
 import { DEFAULT_TTS_PROVIDER, TTS_PRESETS_UI } from "../lib/ttsPresets";
+import { useBrowserSpeech } from "../hooks/useBrowserSpeech";
+import { browserRecognitionSupported } from "../hooks/useBrowserRecognition";
 import { AgentPresetCard } from "./agents/AgentPresetCard";
 import { AgentPresetIcon } from "./agents/AgentPresetIcon";
 import { AgentSetupPanel } from "./agents/AgentSetupPanel";
@@ -62,6 +64,7 @@ interface AppConfig {
 
 const DEFAULT_NEXUS_URL = "http://127.0.0.1:8000";
 
+// Used by the Nexus page when no saved backend config exists yet.
 const DEFAULT_NEXUS_CONFIG: NexusConfig = {
   backend_url: DEFAULT_NEXUS_URL,
   api_key: "",
@@ -70,6 +73,7 @@ const DEFAULT_NEXUS_CONFIG: NexusConfig = {
   retry_count: 3,
   retry_delay: 2000,
 };
+void DEFAULT_NEXUS_CONFIG;
 
 function isValidBackendUrl(raw: string): boolean {
   try {
@@ -359,18 +363,35 @@ export function Settings({
 
   useEffect(() => {
     getConfig()
-      .then((cfg: AppConfig) => applyConfig(cfg))
+      .then((cfg) => applyConfig(cfg as AppConfig))
       .catch((err) => console.error("Failed to load config:", err));
     return () => {
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
     };
   }, [applyConfig]);
 
+  const browserSpeech = useBrowserSpeech();
+  const [browserVoicePreviewError, setBrowserVoicePreviewError] = useState("");
+
   useEffect(() => {
+    if (ttsProvider === "browser") {
+      // Browser voices are real SpeechSynthesis voices from this device/browser.
+      setVoices(
+        browserSpeech.voices.map((v) => ({
+          id: v.voiceURI,
+          name: `${v.name} (${v.lang})`,
+        })),
+      );
+      const best = browserSpeech.selectedVoice;
+      if (best?.voiceURI) {
+        setTtsVoice((prev) => (prev && prev !== "browser-best" ? prev : best.voiceURI));
+      }
+      return;
+    }
     getVoices(ttsProvider)
       .then(setVoices)
       .catch(console.error);
-  }, [ttsProvider]);
+  }, [ttsProvider, browserSpeech.voices, browserSpeech.selectedVoice]);
 
   const handleSaveProfile = async () => {
     setSaving(true);
@@ -378,7 +399,7 @@ export function Settings({
     try {
       await saveConfig({ user: { name: userName, about: userAbout } });
       const fresh = await getConfig();
-      applyConfig(fresh);
+      applyConfig(fresh as AppConfig);
       flashSaved();
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Save failed.");
@@ -399,7 +420,7 @@ export function Settings({
         },
       });
       const fresh = await getConfig();
-      applyConfig(fresh);
+      applyConfig(fresh as AppConfig);
       flashSaved();
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Save failed.");
@@ -416,7 +437,7 @@ export function Settings({
       if (ttsApiKey.trim()) ttsUpdate.api_key = ttsApiKey.trim();
       await saveConfig({ tts: ttsUpdate });
       const fresh = await getConfig();
-      applyConfig(fresh);
+      applyConfig(fresh as AppConfig);
       flashSaved();
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Save failed.");
@@ -439,7 +460,7 @@ export function Settings({
       if (nexusApiKey.trim()) nexusUpdate.api_key = nexusApiKey.trim();
       await saveConfig({ nexus: nexusUpdate });
       const fresh = await getConfig();
-      applyConfig(fresh);
+      applyConfig(fresh as AppConfig);
       flashSaved();
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Save failed.");
@@ -649,8 +670,20 @@ export function Settings({
   };
 
   const TTS_PRESETS_LOCAL: Record<string, { name: string; needs_key: boolean }> = {
+    browser: TTS_PRESETS_UI.browser,
     tiktok: TTS_PRESETS_UI.tiktok,
     elevenlabs: TTS_PRESETS_UI.elevenlabs,
+    openai_tts: TTS_PRESETS_UI.openai_tts,
+  };
+
+  const testBrowserVoice = () => {
+    if (!browserSpeech.supported) {
+      setBrowserVoicePreviewError("Speech synthesis is not supported in this browser.");
+      return;
+    }
+    setBrowserVoicePreviewError("");
+    browserSpeech.setSelectedVoiceURI(ttsVoice);
+    browserSpeech.speak("Hi Aitzaz, I'm Maryam. I'm here with you.", { rate: 1.0 });
   };
 
   const TtsPage = () => (
@@ -682,6 +715,13 @@ export function Settings({
       </div>
 
       <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+        {ttsProvider === "browser" && (
+          <div className="mb-5 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            {browserSpeech.supported
+              ? `Browser voice is real speech synthesis on this device. ${browserSpeech.selectedVoice ? `Currently: ${browserSpeech.selectedVoice.name}.` : ""}`
+              : "Speech synthesis is not supported in this browser."}
+          </div>
+        )}
         {TTS_PRESETS_LOCAL[ttsProvider]?.needs_key && (
           <>
             <label className={labelClass}>API Key</label>
@@ -694,15 +734,16 @@ export function Settings({
             />
           </>
         )}
-        {!TTS_PRESETS_LOCAL[ttsProvider]?.needs_key && (
+        {!TTS_PRESETS_LOCAL[ttsProvider]?.needs_key && ttsProvider !== "browser" && (
           <div className="mb-5 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
             Meuxe TTS is built in — no API key required.
           </div>
         )}
 
         <label className={labelClass}>Voice</label>
-        <div className="relative mb-8">
+        <div className="relative mb-4">
           <select value={ttsVoice} onChange={(e) => setTtsVoice(e.target.value)} className={`${inputClass} appearance-none cursor-pointer mb-0`}>
+            {voices.length === 0 && <option value="">No voices detected</option>}
             {voices.map((v) => (
               <option key={v.id} value={v.id}>{v.name}</option>
             ))}
@@ -711,6 +752,28 @@ export function Settings({
             <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </div>
         </div>
+
+        {ttsProvider === "browser" && (
+          <>
+            <button
+              type="button"
+              onClick={testBrowserVoice}
+              disabled={!browserSpeech.supported || browserSpeech.speaking}
+              className="mb-6 rounded-2xl border border-indigo-200 bg-indigo-50 px-5 py-2.5 text-sm font-semibold text-indigo-700 transition-all hover:bg-indigo-100 disabled:opacity-50"
+            >
+              {browserSpeech.speaking ? "Speaking…" : "Test Maryam's voice"}
+            </button>
+            {browserVoicePreviewError && (
+              <p className="mb-4 text-xs text-red-600">{browserVoicePreviewError}</p>
+            )}
+            <div className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+              <span className="font-semibold">Microphone (voice input): </span>
+              {browserRecognitionSupported()
+                ? "Available in this browser — use the mic button to talk to Maryam."
+                : "Voice input not available in this browser."}
+            </div>
+          </>
+        )}
 
         <div className="flex items-center">
           <button onClick={handleSaveTts} disabled={saving} className={buttonClass} style={{ maxWidth: 320 }}>

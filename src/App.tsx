@@ -11,10 +11,24 @@ import { CharacterSelect } from "./components/CharacterSelect";
 import { Onboarding } from "./components/Onboarding";
 import { Settings } from "./components/Settings";
 import { MiniWidget } from "./components/MiniWidget";
+import { MaryamAvatar } from "./components/MaryamAvatar";
+import { VoiceControlBar } from "./components/voice/VoiceControlBar";
+import type { VoiceState } from "./components/voice/VoiceControlBar";
 import { useChat, cleanCompanionDisplayText } from "./hooks/useChat";
 import { useAudioQueue } from "./hooks/useAudioQueue";
 import { useVoice } from "./hooks/useVoice";
 import { useWindow } from "./hooks/useWindow";
+import { useBrowserSpeech, browserSpeechSupported } from "./hooks/useBrowserSpeech";
+import {
+  useBrowserRecognition,
+  browserRecognitionSupported,
+} from "./hooks/useBrowserRecognition";
+import { isTauri } from "./lib/browserEnv";
+import {
+  normalizeMaryamExpression,
+  guessExpressionForUserText,
+  guessExpressionForAssistantText,
+} from "./lib/maryamExpressions";
 import {
   getConfig,
   listCharacters,
@@ -26,6 +40,29 @@ import {
   resolveAssetUrl,
 } from "./API/tauri";
 import type { Character, ModelInfo } from "./types";
+
+/** Built-in Maryam companion used in browser-only (preview) mode. */
+const MARYAM_BUILTIN: Character = {
+  id: "maryam",
+  name: "Maryam",
+  live2d_model: "builtin-maryam",
+  voice: "browser",
+  default_emotion: "neutral",
+  source_type: "directory",
+};
+
+/** Synthetic model entry so Maryam's avatar shows in pickers without a backend. */
+const MARYAM_MODEL: ModelInfo = {
+  id: "builtin-maryam",
+  type: "maryam",
+  model_file: "",
+  path: "",
+  mapping: null,
+  animations: [],
+};
+
+const MARYAM_WELCOME =
+  "Hi Aitzaz, I'm Maryam. I'm here with you. What would you like to talk about? 😊";
 
 const Live2DCanvas = lazy(() =>
   import("./components/Live2DCanvas").then((m) => ({ default: m.Live2DCanvas }))
@@ -136,7 +173,36 @@ function App() {
   const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
   const [userTyping, setUserTyping] = useState(false);
 
+  // ── Maryam voice (browser Web Speech API — real, no fake states) ──────
+  const isBrowserOnly = !isTauri();
+  const browserSpeech = useBrowserSpeech();
+  const browserRecognition = useBrowserRecognition();
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const voiceEnabledRef = useRef(true);
+  voiceEnabledRef.current = voiceEnabled;
+  const browserSpeechRef = useRef(browserSpeech);
+  browserSpeechRef.current = browserSpeech;
+  // Which TTS engine should speak AI sentences? "browser" = SpeechSynthesis.
+  const ttsProviderRef = useRef<string>("browser");
+  useEffect(() => {
+    if (!isTauri()) {
+      ttsProviderRef.current = "browser";
+      return;
+    }
+    getConfig()
+      .then((cfg) => {
+        const c = cfg as { tts?: { provider?: string } };
+        ttsProviderRef.current = c?.tts?.provider ?? "browser";
+      })
+      .catch(() => {
+        ttsProviderRef.current = "browser";
+      });
+  }, []);
+  const [previewNotice, setPreviewNotice] = useState<string | null>(null);
+  const previewNoticeTimeoutRef = useRef<number | null>(null);
+
   const {
+    messages,
     setMessages,
     timeline,
     isStreaming,
@@ -221,6 +287,13 @@ function App() {
         }
       } catch (err) {
         console.error("Character list load error:", err);
+        // Browser-only mode: fall back to the built-in Maryam companion.
+        if (!isTauri()) {
+          setCharacters([MARYAM_BUILTIN]);
+          if (!preferredId || preferredId === "maryam") {
+            setSelectedCharId("maryam");
+          }
+        }
       }
     },
     [selectedCharId]
@@ -233,10 +306,14 @@ function App() {
     });
   }, [setOnExpressionChange]);
 
-  // Wire chat sentence events to audio queue
+  // Wire chat sentence events to audio queue + browser voice
   useEffect(() => {
     setOnSentence((payload) => {
       addSentence(payload.request_id, payload);
+      // Browser voice: speak the sentence with SpeechSynthesis (real TTS).
+      if (voiceEnabledRef.current && browserSpeechRef.current.supported) {
+        browserSpeechRef.current.speak(payload.text, { rate: 1.0 });
+      }
     });
     setOnAudio((payload) => {
       addAudio(payload.request_id, payload.index, payload.data);
@@ -266,8 +343,17 @@ function App() {
   useEffect(() => {
     refreshCharacters();
     listModels()
-      .then((data) => setModels(data as ModelInfo[]))
-      .catch(console.error);
+      .then((data) => {
+        const list = data as ModelInfo[];
+        if (!isTauri() && !list.some((m) => m.id === MARYAM_MODEL.id)) {
+          setModels([MARYAM_MODEL, ...list]);
+        } else {
+          setModels(list);
+        }
+      })
+      .catch(() => {
+        if (!isTauri()) setModels([MARYAM_MODEL]);
+      });
   }, [refreshCharacters]);
 
   useEffect(() => {
@@ -305,7 +391,7 @@ function App() {
   const [resolvedModelPath, setResolvedModelPath] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!selectedModel?.path) {
+    if (!selectedModel?.path || selectedModel.type === "maryam") {
       setResolvedModelPath(null);
       return;
     }
@@ -330,7 +416,7 @@ function App() {
   }, [selectedModel?.path]);
 
   const modelPath = resolvedModelPath;
-  const modelType = selectedModel?.type === "vrm" ? "vrm" : "live2d";
+  const modelType = selectedModel?.type === "vrm" ? "vrm" : selectedModel?.type === "maryam" ? "maryam" : "live2d";
   const modelMapping = selectedModel?.mapping ?? null;
 
   // Match chat backend: expression files are keyed by character.live2d_model.
@@ -386,11 +472,31 @@ function App() {
   const handleSend = useCallback(
     async (text: string) => {
       if (!selectedCharId || !expressionsConfigured) return;
+
+      // Maryam reacts to what the user actually says.
+      setCurrentExpression(guessExpressionForUserText(text));
+
+      // Browser-only preview: there is no AI engine here. Be honest — do not
+      // fake a reply; explain where the real engine runs.
+      if (!isTauri()) {
+        setPreviewNotice(
+          "Maryam's AI engine runs in the desktop app — this preview shows her presence, expressions and real voice.",
+        );
+        if (previewNoticeTimeoutRef.current) {
+          window.clearTimeout(previewNoticeTimeoutRef.current);
+        }
+        previewNoticeTimeoutRef.current = window.setTimeout(
+          () => setPreviewNotice(null),
+          7000,
+        );
+        return;
+      }
+
       const requestId = crypto.randomUUID();
       beginRequest(requestId);
       await send(selectedCharId, text, requestId);
     },
-    [selectedCharId, expressionsConfigured, send, beginRequest]
+    [selectedCharId, expressionsConfigured, send, beginRequest],
   );
 
   useEffect(() => {
@@ -418,16 +524,73 @@ function App() {
 
   const pendingToolConfirm = toolCalls.find((tc) => tc.status === "awaiting_confirmation") ?? null;
 
+  // ── Real voice states ───────────────────────────────────────────────────
+  // SPEAKING only while actual audio is playing; LISTENING only while the
+  // microphone is live; THINKING while the AI is processing; else IDLE.
+  const effectiveSpeaking = speaking || browserSpeech.speaking;
+  const effectiveListening = listening || browserRecognition.listening;
+  const voiceState: VoiceState = effectiveListening
+    ? "listening"
+    : effectiveSpeaking
+      ? "speaking"
+      : isStreaming
+        ? "thinking"
+        : "idle";
+  const voiceError = browserSpeech.error || browserRecognition.error || null;
+
+  const maryamExpression = useMemo(() => {
+    if (effectiveListening) return "curious" as const;
+    if (effectiveSpeaking) {
+      const n = normalizeMaryamExpression(currentExpression);
+      return n !== "neutral"
+        ? n
+        : guessExpressionForAssistantText(streamingText || "");
+    }
+    if (isStreaming) return "thinking" as const;
+    return normalizeMaryamExpression(currentExpression);
+  }, [effectiveListening, effectiveSpeaking, isStreaming, currentExpression, streamingText]);
+
   const handleMicToggle = useCallback(() => {
-    if (listening) {
-      stopListening();
+    if (effectiveListening) {
+      if (browserRecognition.listening) browserRecognition.stop();
+      else stopListening();
+      return;
+    }
+    // Browser voice input (real SpeechRecognition) when available.
+    if (!isTauri() && browserRecognitionSupported()) {
+      browserRecognition.start((transcript) => {
+        void handleSend(transcript);
+      });
     } else {
       startListening((transcript) => {
-        handleSend(transcript);
+        void handleSend(transcript);
       });
     }
-  }, [listening, startListening, stopListening, handleSend]);
+  }, [effectiveListening, browserRecognition, startListening, stopListening, handleSend]);
   handleMicToggleRef.current = handleMicToggle;
+
+  const handleToggleVoice = useCallback(() => {
+    setVoiceEnabled((prev) => {
+      const next = !prev;
+      if (!next) browserSpeechRef.current.stop();
+      return next;
+    });
+  }, []);
+
+  const handleStopSpeaking = useCallback(() => {
+    browserSpeechRef.current.stop();
+    clearQueue();
+  }, [clearQueue]);
+
+  const handleSayHello = useCallback(() => {
+    if (browserSpeechSupported()) {
+      browserSpeechRef.current.speak(MARYAM_WELCOME.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{2600}-\u{27BF}]/gu, ""), {
+        rate: 1.0,
+      });
+    }
+  }, []);
+
+  const showWelcome = !isStreaming && messages.length === 0;
 
   const handleCharacterChange = useCallback(
     (id: string) => {
@@ -478,6 +641,10 @@ function App() {
     [modelPath, currentExpression, speaking, userTyping, isMiniMode, background, zoom, framing, getAudioLevels]
   );
 
+  // Maryam's built-in avatar renders when her model type is selected, or in
+  // browser-only mode when no backend model is available.
+  const useMaryamAvatar = modelType === "maryam" || (!modelPath && isBrowserOnly);
+
   const avatarCanvas = useMemo(() => (
     <Suspense
       fallback={
@@ -486,7 +653,20 @@ function App() {
         </div>
       }
     >
-      {modelType === "vrm" ? (
+      {useMaryamAvatar ? (
+        <MaryamAvatar
+          key={`maryam-${selectedCharId}`}
+          expression={maryamExpression}
+          speaking={effectiveSpeaking}
+          listening={effectiveListening}
+          thinking={isStreaming}
+          userTyping={userTyping}
+          uiMode={isMiniMode ? "mini" : "full"}
+          background={background}
+          zoom={zoom}
+          framing={framing}
+        />
+      ) : modelType === "vrm" ? (
         <VRMCanvas
           key={`vrm-${selectedCharId}`}
           {...canvasProps}
@@ -500,7 +680,7 @@ function App() {
         />
       )}
     </Suspense>
-  ), [modelType, selectedCharId, canvasProps, selectedModel?.animations, modelMapping]);
+  ), [useMaryamAvatar, maryamExpression, effectiveSpeaking, effectiveListening, isStreaming, userTyping, isMiniMode, background, zoom, framing, modelType, selectedCharId, canvasProps, selectedModel?.animations, modelMapping]);
 
   const charName = selectedChar?.name || "Companion";
 
@@ -541,7 +721,7 @@ function App() {
             <span className="w-3 h-3 rounded-full bg-blue-400 animate-bounce [animation-delay:-0.15s]" />
             <span className="w-3 h-3 rounded-full bg-blue-400 animate-bounce" />
           </div>
-          <div className="text-slate-400 font-semibold text-sm tracking-wide uppercase">Loading</div>
+          <div className="text-slate-400 font-semibold text-sm tracking-wide uppercase">AITZAZ AI 2070</div>
         </div>
       </div>
     );
@@ -561,6 +741,11 @@ function App() {
           listModels()
             .then((data) => setModels(data as ModelInfo[]))
             .catch(console.error);
+        }}
+        onSkipToPreview={() => {
+          setOnboardingComplete(true);
+          refreshCharacters("maryam");
+          setModels([MARYAM_MODEL]);
         }}
       />
     );
@@ -600,7 +785,11 @@ function App() {
                   setHistoryOpen((o) => !o);
                   setCharSelectOpen(false);
                 }}
-                onMini={() => toggleMini(selectedCharId)}
+                onMini={() => {
+                  toggleMini(selectedCharId).catch(() => {
+                    // Mini mode needs the Tauri window shell (desktop app).
+                  });
+                }}
                 onSettings={() => {
                   setSettingsOpen((o) => !o);
                   setCharSelectOpen(false);
@@ -627,14 +816,66 @@ function App() {
 
               <div className="pointer-events-none absolute bottom-6 left-5 z-20 hidden sm:block">
                 <p className="text-sm font-semibold text-slate-800">{charName}</p>
+                <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+                  AITZAZ AI 2070
+                </p>
+              </div>
+
+              <div className="pointer-events-none absolute bottom-6 right-5 z-20 hidden sm:flex">
+                <VoiceControlBar
+                  state={voiceState}
+                  voiceEnabled={voiceEnabled}
+                  onToggleVoice={handleToggleVoice}
+                  onStopSpeaking={handleStopSpeaking}
+                  voiceName={browserSpeech.selectedVoice?.name ?? null}
+                  error={voiceError}
+                />
               </div>
 
               <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col items-center px-4 pb-6 pt-16">
+                {showWelcome && (
+                  <div className="pointer-events-auto mb-2 flex w-full max-w-md flex-col items-center gap-2 animate-in fade-in slide-up duration-500">
+                    <div className="w-full rounded-3xl border border-indigo-100/80 bg-white/90 px-5 py-3.5 shadow-[0_10px_40px_rgba(79,70,229,0.14)] backdrop-blur-xl">
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-[12px] font-bold text-white shadow-md">
+                          M
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-indigo-400">
+                            Maryam · AITZAZ AI 2070
+                          </p>
+                          <p className="mt-1 text-[14px] leading-snug text-slate-700">
+                            {MARYAM_WELCOME}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    {browserSpeechSupported() && (
+                      <button
+                        type="button"
+                        onClick={handleSayHello}
+                        className="pointer-events-auto flex items-center gap-2 rounded-full border border-indigo-200 bg-white/90 px-4 py-2 text-[12px] font-semibold text-indigo-600 shadow-sm backdrop-blur-md transition-all hover:bg-indigo-50"
+                      >
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 12a7 7 0 0114 0M12 5v14m-5-2.5A7.5 7.5 0 0117 16.5" />
+                        </svg>
+                        Say hello
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {previewNotice && (
+                  <div className="pointer-events-auto mb-2 max-w-md rounded-2xl border border-amber-200/80 bg-amber-50/95 px-4 py-2.5 text-center text-[12px] font-medium text-amber-700 shadow-sm backdrop-blur-md">
+                    {previewNotice}
+                  </div>
+                )}
+
                 <FloatingChatInput
                   isProcessing={isStreaming}
                   onSend={handleSend}
                   onTypingChange={handleTypingChange}
-                  listening={listening}
+                  listening={effectiveListening}
                   onMicToggle={handleMicToggle}
                   inputRef={fullChatInputRef}
                   caption={spokenCaption}
@@ -642,7 +883,7 @@ function App() {
                   statusLabel={
                     spokenCaption
                       ? null
-                      : isStreaming || (speechSessionActive && !speaking)
+                      : voiceState === "thinking"
                         ? "Thinking…"
                         : null
                   }

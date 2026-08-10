@@ -3,7 +3,7 @@ import {
   getAgentSetupStatus,
   installAgentSetup,
   type AgentSetupStatusResponse,
-} from "../../api/tauri";
+} from "../../API/tauri";
 import { ACP_AGENT_PRESETS, type AcpAgentPresetId } from "../../lib/agentPresets";
 
 export function AgentSetupPanel({

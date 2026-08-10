@@ -135,7 +135,7 @@ export interface AnimationInfo {
 
 export interface ModelInfo {
   id: string;
-  type: "live2d" | "vrm";
+  type: "live2d" | "vrm" | "maryam";
   model_file: string;
   path: string;
   mapping: ModelMapping | null;
