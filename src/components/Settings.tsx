@@ -8,13 +8,13 @@ import {
   resetAllAppData,
   resetOnboarding,
   getVoices,
-} from "../api/tauri";
+} from "./API/tauri";
 import { ACP_AGENT_PRESET_IDS, ACP_AGENT_PRESETS } from "../lib/agentPresets";
 import { DEFAULT_TTS_PROVIDER, TTS_PRESETS_UI } from "../lib/ttsPresets";
 import { AgentPresetCard } from "./agents/AgentPresetCard";
 import { AgentPresetIcon } from "./agents/AgentPresetIcon";
 import { AgentSetupPanel } from "./agents/AgentSetupPanel";
-import { MeuxeMark } from "./ui/MeuxeMark";
+import { MeuxeMark } from "./UI/MeuxeMark";
 import { AvatarViewportSettings } from "./settings/AvatarViewportSettings";
 import type { AcpAgentPresetId } from "../lib/agentPresets";
 interface Voice {
