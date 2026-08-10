@@ -24,7 +24,7 @@ import {
   getChatHistory,
   clearChat,
   resolveAssetUrl,
-} from "./api/tauri";
+} from "./API/tauri";
 import type { Character, ModelInfo } from "./types";
 
 const Live2DCanvas = lazy(() =>
