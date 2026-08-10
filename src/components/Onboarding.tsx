@@ -7,7 +7,7 @@ import {
   listModels,
   installAgentSetup,
   type AgentSetupStatusResponse,
-} from "../api/tauri";
+} from "../API/tauri";
 import {
   ACP_AGENT_PRESET_IDS,
   type AcpAgentPresetId,
@@ -20,7 +20,7 @@ import { AgentSetupPanel } from "./agents/AgentSetupPanel";
 import { CompanionAvatarPreview } from "./onboarding/CompanionAvatarPreview";
 import { ModelPicker } from "./onboarding/ModelPicker";
 import { OnboardingShell } from "./onboarding/OnboardingShell";
-import { MeuxeMark } from "./ui/MeuxeMark";
+import { MeuxeMark } from "./UI/MeuxeMark";
 
 interface Voice {
   id: string;
