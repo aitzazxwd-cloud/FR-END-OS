@@ -1,3 +1,4 @@
+```tsx
 import { useState, useEffect } from "react";
 import type { JSX } from "react";
 import { ModelSettings } from "./ModelSettings";
@@ -8,7 +9,7 @@ import {
   resetAllAppData,
   resetOnboarding,
   getVoices,
-} from "./API/tauri";
+} from "../API/tauri";
 import { ACP_AGENT_PRESET_IDS, ACP_AGENT_PRESETS } from "../lib/agentPresets";
 import { DEFAULT_TTS_PROVIDER, TTS_PRESETS_UI } from "../lib/ttsPresets";
 import { AgentPresetCard } from "./agents/AgentPresetCard";
@@ -668,3 +669,4 @@ export function Settings({ onClose, characterId, characterName, modelId, onPrevi
 
   return null;
 }
+```
