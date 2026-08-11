@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Rust / Tauri (not needed for the web build)
+src-tauri/
+target/
+crates/
+rust-toolchain.toml
+Cargo.toml
+Cargo.lock
+
+# Build output (Vercel regenerates)
+dist/
+tsconfig.tsbuildinfo
+
+# Tests
+coverage/
+test-results/
+playwright-report/
+
+# Local env / editor
+.env
+.env.*
+.DS_Store
+*.local
