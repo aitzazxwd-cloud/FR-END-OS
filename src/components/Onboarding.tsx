@@ -105,6 +105,19 @@ export function Onboarding({
   });
 
   useEffect(() => {
+    // In browser-only mode there is no Rust backend — don't call invoke().
+    if (isBrowserOnly) {
+      // Provide a synthetic Maryam model entry so the "Look" picker works.
+      setModels([
+        {
+          id: "builtin-maryam",
+          type: "maryam",
+          model_file: "",
+          path: "",
+        } as Model,
+      ]);
+      return;
+    }
     listModels()
       .then((data) => {
         const list = data as Model[];
@@ -117,6 +130,7 @@ export function Onboarding({
         }
       })
       .catch(console.error);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -135,6 +149,8 @@ export function Onboarding({
       }
       return;
     }
+    // Browser-only mode: skip backend TTS voice listing (no Rust backend).
+    if (isBrowserOnly) return;
     getVoices(form.tts.provider)
       .then((data) => {
         setVoices(data);
@@ -245,6 +261,8 @@ export function Onboarding({
       case 3:
         return form.tts.voice !== "";
       case 4:
+        // Browser-only mode: there is no local agent here — allow finishing.
+        if (isBrowserOnly) return true;
         if (form.agent.preset === "custom") {
           return form.agent.program.trim() !== "";
         }
@@ -257,6 +275,9 @@ export function Onboarding({
   };
 
   const stepHint = (): string | null => {
+    if (step === 4 && isBrowserOnly) {
+      return "In this browser preview the AI agent connects in the desktop app — Maryam's presence and voice already work here.";
+    }
     if (step === 4 && form.agent.preset !== "custom" && !canProceed() && !agentSetupLoading) {
       return "Install Node.js above to finish setup.";
     }
@@ -277,6 +298,22 @@ export function Onboarding({
     setSubmitting(true);
     setError("");
     try {
+      // Browser-only mode: no Rust backend exists here, so skip all Tauri
+      // calls (they throw "Cannot read properties of undefined (reading 'invoke')").
+      // Remember the choice locally so refresh keeps Maryam ready.
+      if (isBrowserOnly) {
+        try {
+          localStorage.setItem("meuxe_browser_onboarded", "1");
+          localStorage.setItem("meuxe_browser_name", form.companion.name);
+        } catch {
+          // storage may be unavailable; ignore
+        }
+        setStep(5);
+        setTimeout(onComplete, 1500);
+        setSubmitting(false);
+        return;
+      }
+
       if (form.agent.preset !== "custom" && agentSetup && !agentSetup.agent.ready) {
         const installed = await installAgentSetup(form.agent.preset);
         setAgentSetup(installed);
@@ -548,62 +585,79 @@ export function Onboarding({
         <div className="animate-in fade-in duration-500">
           <h2 className={headingClass}>Who answers for them?</h2>
           <p className={descriptionClass}>
-            Meuxe is the face and memory. Choose the assistant on your computer that powers chat.
+            {isBrowserOnly
+              ? "On the desktop app, Maryam's chat is powered by an AI agent on your computer."
+              : "Meuxe is the face and memory. Choose the assistant on your computer that powers chat."}
           </p>
 
-          <div className="grid grid-cols-1 gap-3 mb-4">
-            {ACP_AGENT_PRESET_IDS.map((id) => (
-              <AgentPresetCard
-                key={id}
-                id={id}
-                selected={form.agent.preset === id}
-                onSelect={() =>
-                  setForm((prev) => ({
-                    ...prev,
-                    agent: { ...prev.agent, preset: id },
-                  }))
-                }
-              />
-            ))}
-          </div>
-
-          {form.agent.preset === "custom" && (
+          {isBrowserOnly ? (
+            <div className="mb-4 rounded-2xl border border-indigo-100 bg-indigo-50/70 px-5 py-4">
+              <p className="text-sm font-semibold text-indigo-700">
+                ✨ Maryam is ready here
+              </p>
+              <p className="mt-1 text-[13px] leading-relaxed text-indigo-600/80">
+                This browser preview gives you Maryam's presence, expressions and real
+                voice. Chat with the AI agent in the desktop app —
+                <span className="font-semibold"> AITZAZ AI 2070</span> connects there.
+              </p>
+            </div>
+          ) : (
             <>
-              <label className={labelClass}>Program to run</label>
-              <input
-                type="text"
-                value={form.agent.program}
-                onChange={(e) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    agent: { ...prev.agent, program: e.target.value },
-                  }))
-                }
-                placeholder="Path or command"
-                className={inputClass}
-              />
-              <label className={labelClass}>Extra options (optional)</label>
-              <input
-                type="text"
-                value={form.agent.args}
-                onChange={(e) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    agent: { ...prev.agent, args: e.target.value },
-                  }))
-                }
-                placeholder="Optional flags"
-                className={inputClass}
-              />
-            </>
-          )}
+              <div className="grid grid-cols-1 gap-3 mb-4">
+                {ACP_AGENT_PRESET_IDS.map((id) => (
+                  <AgentPresetCard
+                    key={id}
+                    id={id}
+                    selected={form.agent.preset === id}
+                    onSelect={() =>
+                      setForm((prev) => ({
+                        ...prev,
+                        agent: { ...prev.agent, preset: id },
+                      }))
+                    }
+                  />
+                ))}
+              </div>
 
-          {form.agent.preset !== "custom" && (
-            <AgentSetupPanel
-              preset={form.agent.preset}
-              onStatusChange={handleAgentSetupStatus}
-              friendly
-            />
+              {form.agent.preset === "custom" && (
+                <>
+                  <label className={labelClass}>Program to run</label>
+                  <input
+                    type="text"
+                    value={form.agent.program}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        agent: { ...prev.agent, program: e.target.value },
+                      }))
+                    }
+                    placeholder="Path or command"
+                    className={inputClass}
+                  />
+                  <label className={labelClass}>Extra options (optional)</label>
+                  <input
+                    type="text"
+                    value={form.agent.args}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        agent: { ...prev.agent, args: e.target.value },
+                      }))
+                    }
+                    placeholder="Optional flags"
+                    className={inputClass}
+                  />
+                </>
+              )}
+
+              {form.agent.preset !== "custom" && (
+                <AgentSetupPanel
+                  preset={form.agent.preset}
+                  onStatusChange={handleAgentSetupStatus}
+                  friendly
+                />
+              )}
+            </>
           )}
         </div>
       )}

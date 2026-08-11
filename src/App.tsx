@@ -75,6 +75,9 @@ const VRMCanvas = lazy(() =>
 function App() {
   const { isMiniMode, miniCharacterId, toggleMini } = useWindow();
 
+  // Plain browser (Vercel preview / localhost) has no Tauri Rust backend.
+  const isBrowserOnly = !isTauri();
+
   // Refs for global shortcut callbacks (so they always see latest state)
   const selectedCharIdRef = useRef("");
 
@@ -89,6 +92,7 @@ function App() {
   // Actions are dispatched via Tauri events so both windows can respond
   useEffect(() => {
     if (isMiniMode) return; // only main window registers shortcuts
+    if (isBrowserOnly) return; // no Tauri backend in a plain browser
 
     const TOGGLE = "CommandOrControl+Shift+E";
     const TEXT = "CommandOrControl+Shift+Space";
@@ -142,6 +146,7 @@ function App() {
 
   // Listen for shortcut events (both windows listen, only the active one acts)
   useEffect(() => {
+    if (isBrowserOnly) return; // no Tauri event bus in a plain browser
     const unlistenText = listen("shortcut:text", () => {
       if (isMiniMode) {
         setMiniComposerTrigger((n) => n + 1);
@@ -156,7 +161,7 @@ function App() {
       unlistenText.then((fn) => fn());
       unlistenMic.then((fn) => fn());
     };
-  }, [isMiniMode]);
+  }, [isMiniMode, isBrowserOnly]);
 
   const [characters, setCharacters] = useState<Character[]>([]);
   const [models, setModels] = useState<ModelInfo[]>([]);
@@ -174,7 +179,6 @@ function App() {
   const [userTyping, setUserTyping] = useState(false);
 
   // ── Maryam voice (browser Web Speech API — real, no fake states) ──────
-  const isBrowserOnly = !isTauri();
   const browserSpeech = useBrowserSpeech();
   const browserRecognition = useBrowserRecognition();
   const [voiceEnabled, setVoiceEnabled] = useState(true);
@@ -237,6 +241,8 @@ function App() {
 
   const loadHistory = useCallback(
     async (characterId: string) => {
+      // Browser-only mode has no Rust backend — no persisted history exists.
+      if (isBrowserOnly) return;
       try {
         const history = (await getChatHistory(characterId)) as Array<{
           role: "user" | "assistant";
@@ -255,7 +261,7 @@ function App() {
         console.error("History load error:", err);
       }
     },
-    [setMessages]
+    [setMessages, isBrowserOnly]
   );
 
   const clearMessages = useCallback(
@@ -270,6 +276,12 @@ function App() {
 
   const refreshCharacters = useCallback(
     async (preferredId?: string) => {
+      // Browser-only mode: no Rust backend — use the built-in Maryam.
+      if (isBrowserOnly) {
+        setCharacters([MARYAM_BUILTIN]);
+        setSelectedCharId(preferredId && preferredId === "maryam" ? preferredId : "maryam");
+        return;
+      }
       try {
         const data = await listCharacters();
         const chars = data as Character[];
@@ -287,16 +299,9 @@ function App() {
         }
       } catch (err) {
         console.error("Character list load error:", err);
-        // Browser-only mode: fall back to the built-in Maryam companion.
-        if (!isTauri()) {
-          setCharacters([MARYAM_BUILTIN]);
-          if (!preferredId || preferredId === "maryam") {
-            setSelectedCharId("maryam");
-          }
-        }
       }
     },
-    [selectedCharId]
+    [selectedCharId, isBrowserOnly]
   );
 
   // Wire audio queue events to model
@@ -342,21 +347,33 @@ function App() {
 
   useEffect(() => {
     refreshCharacters();
+    // Browser-only mode: no Rust backend — use the built-in Maryam model.
+    if (isBrowserOnly) {
+      setModels([MARYAM_MODEL]);
+      return;
+    }
     listModels()
       .then((data) => {
         const list = data as ModelInfo[];
-        if (!isTauri() && !list.some((m) => m.id === MARYAM_MODEL.id)) {
-          setModels([MARYAM_MODEL, ...list]);
-        } else {
-          setModels(list);
-        }
+        setModels(list);
       })
       .catch(() => {
-        if (!isTauri()) setModels([MARYAM_MODEL]);
+        setModels([]);
       });
-  }, [refreshCharacters]);
+  }, [refreshCharacters, isBrowserOnly]);
 
   useEffect(() => {
+    if (isBrowserOnly) {
+      // No Rust backend in a plain browser — check local preference so
+      // refresh doesn't force the user through onboarding again.
+      try {
+        const onboarded = localStorage.getItem("meuxe_browser_onboarded") === "1";
+        setOnboardingComplete(onboarded);
+      } catch {
+        setOnboardingComplete(false);
+      }
+      return;
+    }
     getConfig()
       .then((data) => {
         console.log("[App] config loaded:", JSON.stringify(data));
@@ -423,6 +440,11 @@ function App() {
   const expressionModelId = selectedChar?.live2d_model || selectedModel?.id || null;
 
   const refreshExpressionConfiguration = useCallback(async () => {
+    // Browser-only mode: Maryam's expressions are built in — no backend mapping.
+    if (isBrowserOnly) {
+      setExpressionsConfigured(true);
+      return;
+    }
     if (!expressionModelId) {
       setExpressionsConfigured(true);
       return;
@@ -445,7 +467,7 @@ function App() {
       console.error("Expression configuration load error:", err);
       setExpressionsConfigured(true);
     }
-  }, [expressionModelId, setNeutralExpression]);
+  }, [expressionModelId, setNeutralExpression, isBrowserOnly]);
 
   // Check if expression mapping is configured for current model
   useEffect(() => {
@@ -507,13 +529,14 @@ function App() {
 
   // Reload chat history when switching from mini mode back to full mode
   useEffect(() => {
+    if (isBrowserOnly) return; // no Tauri event bus in a plain browser
     const unlisten = listen<{ mode: string }>("app:mode-changed", (event) => {
       if (event.payload.mode === "full" && selectedCharId) {
         loadHistory(selectedCharId);
       }
     });
     return () => { unlisten.then((fn) => fn()); };
-  }, [selectedCharId, loadHistory]);
+  }, [selectedCharId, loadHistory, isBrowserOnly]);
 
   const handleTypingChange = useCallback(
     (isTyping: boolean) => {
@@ -732,6 +755,12 @@ function App() {
       <Onboarding
         onComplete={() => {
           setOnboardingComplete(true);
+          // Browser-only mode: no Rust backend — use the built-in Maryam.
+          if (isBrowserOnly) {
+            refreshCharacters("maryam");
+            setModels([MARYAM_MODEL]);
+            return;
+          }
           getConfig()
             .then((cfg) => {
               const config = cfg as { active_character?: string };
